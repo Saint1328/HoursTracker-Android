@@ -23,6 +23,7 @@ public class MainActivity extends Activity {
     private final String[] functions={"Audits","Deployments","Processing"};
     private Spinner placeSpinner, functionSpinner;
     private TextView status, summary, history;
+    private Button clockInButton, clockOutButton;
     private LinearLayout root;
     private boolean dark;
     private int savedPlace=0, savedFunction=0;
@@ -98,8 +99,10 @@ public class MainActivity extends Activity {
         root.addView(theme,tlp);theme.setOnClickListener(v->{dark=!dark;persist();draw();});
 
         status=label("",16);status.setTypeface(null,Typeface.BOLD);
-        Button in=button("CLOCK IN  •  Save time + GPS");
-        Button out=secondaryButton("CLOCK OUT  •  Save time + GPS");
+        Button in=button("CLOCK IN  -  Save time + GPS");
+        clockInButton=in;
+        Button out=secondaryButton("CLOCK OUT  -  Save time + GPS");
+        clockOutButton=out;
         in.setOnClickListener(v->clockIn());out.setOnClickListener(v->clockOut());
         section("Current shift",status,in,out);
 
@@ -190,7 +193,9 @@ public class MainActivity extends Activity {
     private long netMinutes(JSONObject e){return Math.max(0,(e.optLong("out")-e.optLong("in"))/60000-60);}
     private void refresh(){
         if(status==null)return;
-        status.setText(active==null?"Status: Clocked out":"CLOCKED IN since "+fmt(active.optLong("in"))+"\nGPS: "+active.optString("inGps"));
+        status.setText(active==null?"Ready to start your shift":"Working since "+fmt(active.optLong("in"))+"\nClock-in GPS: "+active.optString("inGps"));
+        if(clockInButton!=null){clockInButton.setEnabled(active==null);clockInButton.setAlpha(active==null?1f:0.45f);}
+        if(clockOutButton!=null){clockOutButton.setEnabled(active!=null);clockOutButton.setAlpha(active!=null?1f:0.45f);}
         long month=0,week=0,ot=0;
         Calendar now=Calendar.getInstance(),cal=Calendar.getInstance();
         now.setFirstDayOfWeek(Calendar.MONDAY);
