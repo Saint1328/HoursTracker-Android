@@ -92,9 +92,9 @@ public class MainActivity extends Activity {
         ScrollView sc=new ScrollView(this);sc.setFillViewport(true);sc.setBackgroundColor(bg());
         sc.addView(root);setContentView(sc);
         TextView title=label("HOURS TRACKER",26);title.setTypeface(null,Typeface.BOLD);root.addView(title);
-        TextView subtitle=label("My offline workday  |  07:30 - 16:30",13);
+        TextView subtitle=label(new SimpleDateFormat("EEEE, dd MMMM yyyy",Locale.getDefault()).format(new Date()),14);
         subtitle.setTextColor(muted());root.addView(subtitle);
-        Button theme=secondaryButton(dark?"☀  Light mode":"☾  Dark mode");
+        Button theme=secondaryButton(dark?"Switch to light mode":"Switch to dark mode");
         LinearLayout.LayoutParams tlp=new LinearLayout.LayoutParams(-1,-2);tlp.setMargins(0,pad(8),0,pad(15));
         root.addView(theme,tlp);theme.setOnClickListener(v->{dark=!dark;persist();draw();});
 
@@ -104,13 +104,13 @@ public class MainActivity extends Activity {
         Button out=secondaryButton("CLOCK OUT  -  Save time + GPS");
         clockOutButton=out;
         in.setOnClickListener(v->clockIn());out.setOnClickListener(v->clockOut());
-        section("Current shift",status,in,out);
+        section("Today - time tracking",status,in,out);
 
         placeSpinner=new Spinner(this);placeSpinner.setAdapter(adapter(places));
         functionSpinner=new Spinner(this);functionSpinner.setAdapter(adapter(functions));
         TextView l1=label("Location",14);l1.setTextColor(muted());
         TextView l2=label("Work function",14);l2.setTextColor(muted());
-        section("Shift details",l1,placeSpinner,l2,functionSpinner);
+        section("Where and what",l1,placeSpinner,l2,functionSpinner);
         placeSpinner.setSelection(active!=null?find(places,active.optString("place")):Math.min(savedPlace,places.length-1));
         functionSpinner.setSelection(active!=null?find(functions,active.optString("function")):Math.min(savedFunction,functions.length-1));
         placeSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
@@ -160,6 +160,14 @@ public class MainActivity extends Activity {
     }
     private void clockOut(){
         if(active==null){toast("Clock in first.");return;}
+        new AlertDialog.Builder(this)
+            .setTitle("Finish your shift?")
+            .setMessage("Your clock-out time will be saved now. GPS is captured when available.")
+            .setNegativeButton("Cancel",null)
+            .setPositiveButton("Clock out",(dialog,which)->finishClockOut())
+            .show();
+    }
+    private void finishClockOut(){
         JSONObject record=active;
         try {record.put("out",System.currentTimeMillis());record.put("outGps","Pending");entries.put(record);}catch(Exception ignored){}
         active=null;persist();refresh();gps("outGps");
@@ -193,19 +201,20 @@ public class MainActivity extends Activity {
     private long netMinutes(JSONObject e){return Math.max(0,(e.optLong("out")-e.optLong("in"))/60000-60);}
     private void refresh(){
         if(status==null)return;
-        status.setText(active==null?"Ready to start your shift":"Working since "+fmt(active.optLong("in"))+"\nClock-in GPS: "+active.optString("inGps"));
+        status.setText(active==null?"CLOCKED OUT  -  Ready to start":"CLOCKED IN  -  "+fmt(active.optLong("in"))+"\nGPS: "+active.optString("inGps"));
         if(clockInButton!=null){clockInButton.setEnabled(active==null);clockInButton.setAlpha(active==null?1f:0.45f);}
         if(clockOutButton!=null){clockOutButton.setEnabled(active!=null);clockOutButton.setAlpha(active!=null?1f:0.45f);}
-        long month=0,week=0,ot=0;
+        long month=0,week=0,ot=0,today=0,todayOt=0;
         Calendar now=Calendar.getInstance(),cal=Calendar.getInstance();
         now.setFirstDayOfWeek(Calendar.MONDAY);
         StringBuilder log=new StringBuilder();
         for(int i=entries.length()-1;i>=0;i--){JSONObject e=entries.optJSONObject(i);if(e==null)continue;cal.setTimeInMillis(e.optLong("in"));long minutes=netMinutes(e);
             if(cal.get(Calendar.YEAR)==now.get(Calendar.YEAR)&&cal.get(Calendar.MONTH)==now.get(Calendar.MONTH)){month+=minutes;ot+=Math.max(0,minutes-480);}
+            if(cal.get(Calendar.YEAR)==now.get(Calendar.YEAR)&&cal.get(Calendar.DAY_OF_YEAR)==now.get(Calendar.DAY_OF_YEAR)){today+=minutes;todayOt+=Math.max(0,minutes-480);}
             if(cal.get(Calendar.YEAR)==now.get(Calendar.YEAR)&&cal.get(Calendar.WEEK_OF_YEAR)==now.get(Calendar.WEEK_OF_YEAR))week+=minutes;
             if(i>=entries.length()-12)log.append("\n").append(fmt(e.optLong("in"))).append(" - ").append(fmt(e.optLong("out"))).append("\n").append(e.optString("place")).append(" / ").append(e.optString("function")).append(" | ").append(hours(minutes)).append(" worked | ").append(hours(Math.max(0,minutes-480))).append(" OT\n");
         }
-        summary.setText("This week       "+hours(week)+"\nThis month    "+hours(month)+"\nOvertime        "+hours(ot)+"\nCompleted shifts   "+entries.length());
+        summary.setText("TODAY         "+hours(today)+"\nToday overtime     "+hours(todayOt)+"\n\nTHIS WEEK     "+hours(week)+"\nTHIS MONTH    "+hours(month)+"\nMonthly overtime   "+hours(ot)+"\n\nCompleted shifts   "+entries.length());
         history.setText(log.length()==0?"No completed shifts yet. Clock in to get started.":log.toString());
     }
     private String hours(long min){return String.format(Locale.US,"%dh %02dm",min/60,min%60);}
