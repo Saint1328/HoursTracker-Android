@@ -43,18 +43,71 @@ public class MainActivity extends Activity {
         try { active=new JSONObject(p.getString("active","")); } catch(Exception e){active=null;}
     }
     private void persist(){getPreferences(MODE_PRIVATE).edit().putString("entries",entries.toString()).putString("active",active==null?"":active.toString()).putBoolean("dark",dark).putInt("savedPlace",savedPlace).putInt("savedFunction",savedFunction).apply();}
-    private int bg(){return dark?Color.rgb(17,24,39):Color.rgb(248,250,252);}
-    private int fg(){return dark?Color.WHITE:Color.rgb(20,30,47);}
+    private int bg(){return dark?0xff0b1220:0xfff3f6fb;}
+    private int fg(){return dark?0xfff8fafc:0xff142238;}
     private int muted(){return dark?0xffcbd5e1:0xff475569;}
-    private TextView label(String s,int size){ TextView t=new TextView(this);t.setText(s);t.setTextColor(fg());t.setTextSize(size);t.setPadding(0,12,0,10);return t; }
-    private Button button(String s){Button b=new Button(this);b.setText(s);b.setAllCaps(false);return b;}
+    private int panel(){return dark?0xff19263b:0xffffffff;}
+    private int stroke(){return dark?0xff334155:0xffd9e2ee;}
+    private int accent(){return dark?0xff60a5fa:0xff1d4ed8;}
+    private int good(){return dark?0xff6ee7b7:0xff047857;}
+    private int pad(int dp){return (int)(dp*getResources().getDisplayMetrics().density+0.5f);}
+    private android.graphics.drawable.GradientDrawable shape(int color,int border){
+        android.graphics.drawable.GradientDrawable d=new android.graphics.drawable.GradientDrawable();
+        d.setColor(color);d.setCornerRadius(pad(15));d.setStroke(pad(1),border);return d;
+    }
+    private TextView label(String s,int size){
+        TextView t=new TextView(this);t.setText(s);t.setTextColor(fg());t.setTextSize(size);
+        t.setPadding(0,pad(5),0,pad(5));return t;
+    }
+    private TextView heading(String s){
+        TextView t=label(s,17);t.setTypeface(null,Typeface.BOLD);return t;
+    }
+    private Button button(String s){
+        Button b=new Button(this);b.setText(s);b.setAllCaps(false);
+        b.setTextColor(dark?0xff08172d:Color.WHITE);
+        b.setTextSize(15);b.setTypeface(null,Typeface.BOLD);
+        b.setBackground(shape(accent(),accent()));b.setMinHeight(pad(50));
+        return b;
+    }
+    private Button secondaryButton(String s){
+        Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextSize(14);
+        b.setTextColor(fg());b.setBackground(shape(panel(),stroke()));b.setMinHeight(pad(46));return b;
+    }
+    private void section(String title,View... children){
+        LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(pad(16),pad(15),pad(16),pad(15));
+        card.setBackground(shape(panel(),stroke()));
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
+        lp.setMargins(0,0,0,pad(14));root.addView(card,lp);
+        TextView h=heading(title);h.setPadding(0,0,0,pad(8));card.addView(h);
+        for(View v:children){
+            LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,-2);cp.setMargins(0,pad(3),0,pad(6));
+            card.addView(v,cp);
+        }
+    }
     private void draw(){
-        root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(22,18,22,24);root.setBackgroundColor(bg());
-        ScrollView sc=new ScrollView(this);sc.addView(root);setContentView(sc);
-        TextView title=label("HOURS TRACKER",25);title.setTypeface(null,Typeface.BOLD);root.addView(title);
-        Button theme=button(dark?"Switch to light mode":"Switch to dark mode");root.addView(theme);theme.setOnClickListener(v->{dark=!dark;persist();draw();});
-        root.addView(label("Location",15));placeSpinner=new Spinner(this);placeSpinner.setAdapter(adapter(places));root.addView(placeSpinner);
-        root.addView(label("Function",15));functionSpinner=new Spinner(this);functionSpinner.setAdapter(adapter(functions));root.addView(functionSpinner);
+        root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(pad(18),pad(24),pad(18),pad(30));root.setBackgroundColor(bg());
+        ScrollView sc=new ScrollView(this);sc.setFillViewport(true);sc.setBackgroundColor(bg());
+        sc.addView(root);setContentView(sc);
+        TextView title=label("HOURS TRACKER",26);title.setTypeface(null,Typeface.BOLD);root.addView(title);
+        TextView subtitle=label("My offline workday  |  07:30 - 16:30",13);
+        subtitle.setTextColor(muted());root.addView(subtitle);
+        Button theme=secondaryButton(dark?"☀  Light mode":"☾  Dark mode");
+        LinearLayout.LayoutParams tlp=new LinearLayout.LayoutParams(-1,-2);tlp.setMargins(0,pad(8),0,pad(15));
+        root.addView(theme,tlp);theme.setOnClickListener(v->{dark=!dark;persist();draw();});
+
+        status=label("",16);status.setTypeface(null,Typeface.BOLD);
+        Button in=button("CLOCK IN  •  Save time + GPS");
+        Button out=secondaryButton("CLOCK OUT  •  Save time + GPS");
+        in.setOnClickListener(v->clockIn());out.setOnClickListener(v->clockOut());
+        section("Current shift",status,in,out);
+
+        placeSpinner=new Spinner(this);placeSpinner.setAdapter(adapter(places));
+        functionSpinner=new Spinner(this);functionSpinner.setAdapter(adapter(functions));
+        TextView l1=label("Location",14);l1.setTextColor(muted());
+        TextView l2=label("Work function",14);l2.setTextColor(muted());
+        section("Shift details",l1,placeSpinner,l2,functionSpinner);
         placeSpinner.setSelection(active!=null?find(places,active.optString("place")):Math.min(savedPlace,places.length-1));
         functionSpinner.setSelection(active!=null?find(functions,active.optString("function")):Math.min(savedFunction,functions.length-1));
         placeSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
@@ -65,16 +118,34 @@ public class MainActivity extends Activity {
             @Override public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){savedFunction=position;persist();}
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
         });
-        status=label("",16);root.addView(status);
-        Button in=button("CLOCK IN - capture time & GPS");root.addView(in);in.setOnClickListener(v->clockIn());
-        Button out=button("CLOCK OUT - capture time & GPS");root.addView(out);out.setOnClickListener(v->clockOut());
-        summary=label("",17);root.addView(summary);
-        Button export=button("EXPORT CSV TO PHONE / PC");root.addView(export);export.setOnClickListener(v->export());
-        history=label("",13);root.addView(history);
-        root.addView(label("Standard: 07:30-16:30 | 60 min unpaid break | 8 net hours/day. GPS may be unavailable indoors; time recording still works.",12));
+        summary=label("",16);summary.setLineSpacing(pad(5),1.0f);
+        section("Hours overview",summary);
+        Button export=button("Export timesheet as CSV");
+        export.setOnClickListener(v->export());
+        TextView privacy=label("Export files to your phone and transfer them to Excel on your PC. GPS data stays on the device unless exported.",12);
+        privacy.setTextColor(muted());
+        section("Timesheet export",export,privacy);
+        history=label("",14);history.setLineSpacing(pad(3),1.0f);
+        section("Recent shifts",history);
+        TextView info=label("Standard day: 8 net hours. Unpaid break: 60 minutes. Daily hours beyond 8 count as overtime. GPS might be unavailable indoors; timestamps always save.",12);
+        info.setTextColor(muted());root.addView(info);
         refresh();
     }
-    private ArrayAdapter<String> adapter(String[] a){ArrayAdapter<String> ad=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,a);ad.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);return ad;}
+    private ArrayAdapter<String> adapter(String[] a){
+        ArrayAdapter<String> ad=new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,a){
+            @Override public View getView(int position,View convertView,android.view.ViewGroup parent){
+                TextView t=(TextView)super.getView(position,convertView,parent);
+                t.setTextColor(fg());t.setTextSize(16);t.setPadding(pad(12),pad(12),pad(12),pad(12));
+                t.setBackground(shape(panel(),stroke()));return t;
+            }
+            @Override public View getDropDownView(int position,View convertView,android.view.ViewGroup parent){
+                TextView t=(TextView)super.getDropDownView(position,convertView,parent);
+                t.setTextColor(fg());t.setTextSize(16);t.setPadding(pad(16),pad(14),pad(16),pad(14));
+                t.setBackgroundColor(panel());return t;
+            }
+        };
+        ad.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);return ad;
+    }
     private int find(String[] arr,String val){for(int i=0;i<arr.length;i++)if(arr[i].equals(val))return i;return 0;}
     private void clockIn(){
         if(active!=null){toast("Already clocked in. Clock out first.");return;}
@@ -123,14 +194,14 @@ public class MainActivity extends Activity {
         long month=0,week=0,ot=0;
         Calendar now=Calendar.getInstance(),cal=Calendar.getInstance();
         now.setFirstDayOfWeek(Calendar.MONDAY);
-        StringBuilder log=new StringBuilder("\nRECENT SHIFTS\n");
+        StringBuilder log=new StringBuilder();
         for(int i=entries.length()-1;i>=0;i--){JSONObject e=entries.optJSONObject(i);if(e==null)continue;cal.setTimeInMillis(e.optLong("in"));long minutes=netMinutes(e);
             if(cal.get(Calendar.YEAR)==now.get(Calendar.YEAR)&&cal.get(Calendar.MONTH)==now.get(Calendar.MONTH)){month+=minutes;ot+=Math.max(0,minutes-480);}
             if(cal.get(Calendar.YEAR)==now.get(Calendar.YEAR)&&cal.get(Calendar.WEEK_OF_YEAR)==now.get(Calendar.WEEK_OF_YEAR))week+=minutes;
             if(i>=entries.length()-12)log.append("\n").append(fmt(e.optLong("in"))).append(" - ").append(fmt(e.optLong("out"))).append("\n").append(e.optString("place")).append(" / ").append(e.optString("function")).append(" | ").append(hours(minutes)).append(" worked | ").append(hours(Math.max(0,minutes-480))).append(" OT\n");
         }
-        summary.setText("THIS WEEK: "+hours(week)+"\nTHIS MONTH: "+hours(month)+"\nMONTHLY OVERTIME: "+hours(ot)+"\nTOTAL SHIFTS: "+entries.length());
-        history.setText(log.toString());
+        summary.setText("This week       "+hours(week)+"\nThis month    "+hours(month)+"\nOvertime        "+hours(ot)+"\nCompleted shifts   "+entries.length());
+        history.setText(log.length()==0?"No completed shifts yet. Clock in to get started.":log.toString());
     }
     private String hours(long min){return String.format(Locale.US,"%dh %02dm",min/60,min%60);}
     private void export(){
